@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register — Student Academic Hub</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body style="padding-top:0;">
+
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div class="text-center mb-4">
+      <div class="auth-logo"><i class="fas fa-graduation-cap"></i></div>
+      <h3 class="auth-title mt-2">Create Account</h3>
+      <p class="auth-subtitle">Join Academic Hub today</p>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <form id="registerForm">
+      <div class="mb-3">
+        <label>Full Name</label>
+        <input type="text" id="name" class="form-control mt-1" placeholder="Your full name" required />
+      </div>
+      <div class="mb-3">
+        <label>Email Address</label>
+        <input type="email" id="email" class="form-control mt-1" placeholder="you@email.com" required />
+      </div>
+      <div class="mb-4">
+        <label>Password</label>
+        <input type="password" id="password" class="form-control mt-1" placeholder="Min. 6 characters" minlength="6" required />
+      </div>
+      <button type="submit" class="btn btn-primary w-100 py-2" id="regBtn">
+        <span id="regSpinner" class="spinner-border spinner-border-sm me-2 d-none"></span>
+        Create Account
+      </button>
+    </form>
+
+    <hr class="my-3" />
+    <p class="text-center mb-0" style="color:var(--muted);font-size:.9rem;">
+      Already have an account?
+      <a href="index.html" style="color:var(--accent);text-decoration:none;">Login</a>
+    </p>
+  </div>
+</div>
+
+<script src="js/utils.js"></script>
+<script>
+  if (getToken()) window.location.href = 'dashboard.html';
+
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn  = document.getElementById('regBtn');
+    const spin = document.getElementById('regSpinner');
+    const alertBox = document.getElementById('alertBox');
+    alertBox.innerHTML = '';
+    btn.disabled = true; spin.classList.remove('d-none');
+
+    try {
+      const data = await api('POST', '/auth/register', {
+        name:     document.getElementById('name').value.trim(),
+        email:    document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      });
+      localStorage.setItem('token',   data.token);
+      localStorage.setItem('student', JSON.stringify(data.student));
+      toast('Account created! Welcome to Academic Hub.', 'success');
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 800);
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-danger py-2">${err.message}</div>`;
+      btn.disabled = false; spin.classList.add('d-none');
+    }
+  });
+</script>
+</body>
+</html>

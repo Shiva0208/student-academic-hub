@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deadlines — Student Academic Hub</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+  <div class="container">
+    <a class="navbar-brand" href="dashboard.html"><i class="fas fa-graduation-cap me-2"></i>AcademicHub</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" data-page="dashboard" href="dashboard.html"><i class="fas fa-th-large me-1"></i>Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" data-page="notes"     href="notes.html"><i class="fas fa-sticky-note me-1"></i>Notes</a></li>
+        <li class="nav-item"><a class="nav-link" data-page="projects"  href="projects.html"><i class="fas fa-project-diagram me-1"></i>Projects</a></li>
+        <li class="nav-item"><a class="nav-link" data-page="deadlines" href="deadlines.html"><i class="fas fa-clock me-1"></i>Deadlines</a></li>
+        <li class="nav-item"><a class="nav-link" data-page="groups"    href="groups.html"><i class="fas fa-users me-1"></i>Groups</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3">
+        <span class="text-light" id="studentName"></span>
+        <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt me-1"></i>Logout</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <h4 class="page-title mb-0"><i class="fas fa-clock me-2"></i>Deadlines</h4>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#dlModal" onclick="openAdd()">
+      <i class="fas fa-plus me-1"></i>Add Deadline
+    </button>
+  </div>
+
+  <!-- Filter tabs -->
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <input type="text" id="searchInput" class="search-input" placeholder="Search deadlines..." style="max-width:260px;" oninput="renderDeadlines()" />
+    <div class="filter-tabs d-flex gap-1 flex-wrap">
+      <button class="btn btn-outline-secondary btn-sm active" id="filterAll"       onclick="setFilter('all')">All</button>
+      <button class="btn btn-outline-secondary btn-sm"        id="filterUpcoming"  onclick="setFilter('upcoming')">Upcoming</button>
+      <button class="btn btn-outline-secondary btn-sm"        id="filterCompleted" onclick="setFilter('completed')">Completed</button>
+      <button class="btn btn-outline-secondary btn-sm"        id="filterMissed"    onclick="setFilter('missed')">Missed</button>
+    </div>
+  </div>
+
+  <div id="deadlineList">
+    <div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="dlModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Add Deadline</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="dlId" />
+        <div class="mb-3">
+          <label>Title *</label>
+          <input type="text" id="dlTitle" class="form-control mt-1" placeholder="Deadline title" />
+        </div>
+        <div class="mb-3">
+          <label>Description</label>
+          <textarea id="dlDesc" class="form-control mt-1" rows="3" placeholder="Details..."></textarea>
+        </div>
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label>Due Date & Time *</label>
+            <input type="datetime-local" id="dlDue" class="form-control mt-1" />
+          </div>
+          <div class="col-sm-6">
+            <label>Priority</label>
+            <select id="dlPriority" class="form-select mt-1">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveDeadline()">
+          <span id="saveSpinner" class="spinner-border spinner-border-sm me-1 d-none"></span>
+          <span id="saveText">Save Deadline</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/utils.js"></script>
+<script>
+  if (!checkAuth()) throw new Error('Not logged in');
+  initNav('deadlines');
+
+  let allDeadlines = [];
+  let curFilter    = 'all';
+
+  async function loadDeadlines() {
+    try {
+      allDeadlines = await api('GET', '/deadlines');
+      renderDeadlines();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  function setFilter(f) {
+    curFilter = f;
+    document.querySelectorAll('.filter-tabs .btn').forEach(b => b.classList.remove('active'));
+    const key = 'filter' + f.charAt(0).toUpperCase() + f.slice(1);
+    document.getElementById(key).classList.add('active');
+    renderDeadlines();
+  }
+
+  function renderDeadlines() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const dls = allDeadlines.filter(d => {
+      const matchQ = d.title.toLowerCase().includes(q) || (d.description||'').toLowerCase().includes(q);
+      const matchF = curFilter === 'all' || d.status === curFilter;
+      return matchQ && matchF;
+    });
+
+    const list = document.getElementById('deadlineList');
+    if (!dls.length) {
+      list.innerHTML = `<div class="empty-state"><i class="fas fa-clock"></i><p>No deadlines found</p><button class="btn btn-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#dlModal" onclick="openAdd()">Add your first deadline</button></div>`;
+      return;
+    }
+
+    list.innerHTML = dls.map(d => {
+      const days     = daysUntil(d.dueDate);
+      const overdue  = d.status === 'upcoming' && days < 0;
+      const dueSoon  = d.status === 'upcoming' && days >= 0 && days <= 3;
+      const doneClass = d.status === 'completed' ? 'done' : '';
+
+      let dueLabel = '';
+      if (d.status === 'completed') dueLabel = `<i class="fas fa-check-circle me-1" style="color:var(--success)"></i>Completed`;
+      else if (d.status === 'missed') dueLabel = `<i class="fas fa-times-circle me-1" style="color:var(--danger)"></i>Missed`;
+      else if (overdue) dueLabel = `<span class="overdue"><i class="fas fa-exclamation-circle me-1"></i>Overdue by ${Math.abs(days)}d</span>`;
+      else if (days === 0) dueLabel = `<span class="due-soon"><i class="fas fa-bell me-1"></i>Due Today</span>`;
+      else if (dueSoon) dueLabel = `<span class="due-soon"><i class="fas fa-bell me-1"></i>${days}d left</span>`;
+      else dueLabel = `<span style="color:var(--muted)"><i class="fas fa-calendar me-1"></i>${days}d left</span>`;
+
+      return `
+      <div class="deadline-item priority-${d.priority} ${doneClass}">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div style="flex:1;min-width:0">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+              ${priorityTag(d.priority)}
+              <h6 class="fw-600 mb-0 text-truncate">${esc(d.title)}</h6>
+            </div>
+            ${d.description ? `<p class="mb-1" style="font-size:.85rem;color:var(--muted)">${esc(d.description)}</p>` : ''}
+            <div class="d-flex flex-wrap gap-3 align-items-center" style="font-size:.82rem;">
+              <span><i class="fas fa-clock me-1" style="color:var(--muted)"></i>${fmtDateTime(d.dueDate)}</span>
+              ${dueLabel}
+            </div>
+          </div>
+          <div class="d-flex gap-1 flex-shrink-0">
+            ${d.status === 'upcoming' ? `<button class="btn btn-outline-success btn-sm py-0 px-2" onclick="markStatus('${d._id}','completed')" title="Mark Complete"><i class="fas fa-check"></i></button>` : ''}
+            ${d.status === 'completed' ? `<button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="markStatus('${d._id}','upcoming')" title="Mark Upcoming"><i class="fas fa-undo"></i></button>` : ''}
+            <button class="btn btn-outline-primary btn-sm py-0 px-2" onclick="openEdit(${JSON.stringify(d).replace(/"/g,'&quot;')})"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-outline-danger  btn-sm py-0 px-2" onclick="deleteDeadline('${d._id}')"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function openAdd() {
+    document.getElementById('dlId').value = '';
+    document.getElementById('dlTitle').value = '';
+    document.getElementById('dlDesc').value = '';
+    document.getElementById('dlDue').value = '';
+    document.getElementById('dlPriority').value = 'medium';
+    document.getElementById('modalTitle').textContent = 'Add Deadline';
+    document.getElementById('saveText').textContent = 'Save Deadline';
+  }
+
+  function openEdit(d) {
+    document.getElementById('dlId').value = d._id;
+    document.getElementById('dlTitle').value = d.title;
+    document.getElementById('dlDesc').value = d.description || '';
+    document.getElementById('dlDue').value = d.dueDate ? new Date(d.dueDate).toISOString().slice(0,16) : '';
+    document.getElementById('dlPriority').value = d.priority;
+    document.getElementById('modalTitle').textContent = 'Edit Deadline';
+    document.getElementById('saveText').textContent = 'Update Deadline';
+    new bootstrap.Modal(document.getElementById('dlModal')).show();
+  }
+
+  async function saveDeadline() {
+    const id    = document.getElementById('dlId').value;
+    const title = document.getElementById('dlTitle').value.trim();
+    const due   = document.getElementById('dlDue').value;
+    if (!title || !due) { toast('Title and due date are required.', 'warning'); return; }
+
+    const body = {
+      title,
+      description: document.getElementById('dlDesc').value,
+      dueDate: due,
+      priority: document.getElementById('dlPriority').value
+    };
+
+    const spin = document.getElementById('saveSpinner');
+    spin.classList.remove('d-none');
+    try {
+      if (id) await api('PUT',  `/deadlines/${id}`, body);
+      else    await api('POST', '/deadlines',        body);
+      bootstrap.Modal.getInstance(document.getElementById('dlModal')).hide();
+      toast(id ? 'Deadline updated!' : 'Deadline added!', 'success');
+      loadDeadlines();
+    } catch (err) { toast(err.message, 'error'); }
+    finally { spin.classList.add('d-none'); }
+  }
+
+  async function deleteDeadline(id) {
+    if (!confirm2('Delete this deadline?')) return;
+    try {
+      await api('DELETE', `/deadlines/${id}`);
+      toast('Deadline deleted.', 'success');
+      loadDeadlines();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function markStatus(id, status) {
+    try {
+      await api('PATCH', `/deadlines/${id}/status`, { status });
+      toast(status === 'completed' ? 'Marked as completed!' : 'Marked as upcoming.', 'success');
+      loadDeadlines();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  loadDeadlines();
+</script>
+</body>
+</html>
