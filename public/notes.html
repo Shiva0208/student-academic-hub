@@ -103,6 +103,21 @@
       <div class="modal-body">
         <div id="viewMeta" class="mb-3" style="color:var(--muted);font-size:.85rem;"></div>
         <div id="viewContent" style="white-space:pre-wrap;line-height:1.7;"></div>
+
+        <!-- Attachments -->
+        <div class="attachment-list">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small style="color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;">
+              <i class="fas fa-paperclip me-1"></i>Attachments
+            </small>
+            <label class="btn btn-outline-secondary btn-sm py-0 px-2" style="cursor:pointer;">
+              <i class="fas fa-upload me-1"></i>Upload
+              <input type="file" id="noteFileInput" style="display:none;" onchange="uploadNoteFile()" />
+            </label>
+          </div>
+          <div id="noteAttachmentsList"></div>
+          <div id="noteUploadProgress" class="upload-progress d-none"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -114,8 +129,9 @@
   if (!checkAuth()) throw new Error('Not logged in');
   initNav('notes');
 
-  let allNotes  = [];
-  let curFilter = 'all';
+  let allNotes        = [];
+  let curFilter       = 'all';
+  let currentViewNoteId = null;
 
   async function loadNotes() {
     try {
@@ -157,6 +173,7 @@
           </div>
           <h6 class="fw-600 mb-1" style="cursor:pointer" onclick="viewNote('${n._id}')">${esc(n.title)}</h6>
           <p class="note-preview mb-2">${esc(n.content || 'No content')}</p>
+          ${(n.attachments && n.attachments.length) ? `<div style="font-size:.72rem;color:var(--muted);margin-bottom:.3rem;"><i class="fas fa-paperclip me-1"></i>${n.attachments.length} file${n.attachments.length !== 1 ? 's' : ''}</div>` : ''}
           <div class="note-meta d-flex justify-content-between align-items-center">
             <span>${timeAgo(n.updatedAt)}</span>
             <div class="d-flex gap-1">
@@ -197,13 +214,64 @@
   function viewNote(id) {
     const n = allNotes.find(x => x._id === id);
     if (!n) return;
+    currentViewNoteId = n._id;
     document.getElementById('viewTitle').textContent = n.title;
     document.getElementById('viewMeta').innerHTML = `
       ${n.subject ? `<span class="subject-tag">${esc(n.subject)}</span> · ` : ''}
       Updated ${fmtDateTime(n.updatedAt)}
       ${n.isShared ? ' · <span class="shared-badge"><i class="fas fa-share-alt me-1"></i>Shared</span>' : ''}`;
     document.getElementById('viewContent').textContent = n.content || 'No content';
+    renderNoteAttachments(n.attachments || []);
     new bootstrap.Modal(document.getElementById('viewModal')).show();
+  }
+
+  function renderNoteAttachments(attachments) {
+    const el = document.getElementById('noteAttachmentsList');
+    if (!attachments.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;padding:.4rem 0;">No files attached yet.</div>';
+      return;
+    }
+    el.innerHTML = attachments.map(a => `
+      <div class="attachment-item">
+        <i class="fas fa-${fileIcon(a.mimetype)} att-icon"></i>
+        <a class="att-name" href="/api/files/${a.fileId}" target="_blank" title="${esc(a.originalName)}">${esc(a.originalName)}</a>
+        <span class="att-size">${fmtSize(a.size)}</span>
+        <div class="att-actions">
+          <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteNoteAttachment('${a.fileId}')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function uploadNoteFile() {
+    const input = document.getElementById('noteFileInput');
+    if (!input.files.length || !currentViewNoteId) return;
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    const prog = document.getElementById('noteUploadProgress');
+    prog.classList.remove('d-none');
+    try {
+      const attachment = await apiUpload('POST', `/notes/${currentViewNoteId}/attachments`, formData);
+      const note = allNotes.find(n => n._id === currentViewNoteId);
+      if (note) { note.attachments = note.attachments || []; note.attachments.push(attachment); }
+      renderNoteAttachments(note ? note.attachments : [attachment]);
+      renderNotes();
+      toast('File uploaded!', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { prog.classList.add('d-none'); input.value = ''; }
+  }
+
+  async function deleteNoteAttachment(fileId) {
+    if (!confirm2('Remove this attachment?')) return;
+    try {
+      await api('DELETE', `/notes/${currentViewNoteId}/attachments/${fileId}`);
+      const note = allNotes.find(n => n._id === currentViewNoteId);
+      if (note) note.attachments = note.attachments.filter(a => a.fileId !== fileId);
+      renderNoteAttachments(note ? note.attachments : []);
+      renderNotes();
+      toast('Attachment removed.', 'success');
+    } catch (err) { toast(err.message, 'error'); }
   }
 
   async function saveNote() {

@@ -127,3 +127,45 @@ function avatar(name) {
   const parts = (name || '?').split(' ');
   return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
 }
+
+// ---- File upload API helper (no Content-Type header — browser sets multipart boundary) ----
+async function apiUpload(method, endpoint, formData) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${API}${endpoint}`, { method, headers, body: formData });
+  } catch (err) {
+    throw new Error('Server is not running. Run: npm run dev');
+  }
+
+  const text = await res.text();
+  if (!text) throw new Error('Server returned empty response.');
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Server error. Check terminal.'); }
+  if (!res.ok) throw new Error(data.error || 'Upload failed');
+  return data;
+}
+
+// ---- Format file size ----
+function fmtSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024)     return bytes + ' B';
+  if (bytes < 1048576)  return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ---- File icon (Font Awesome name) ----
+function fileIcon(mimetype) {
+  if (!mimetype)                                               return 'file';
+  if (mimetype.startsWith('image/'))                          return 'file-image';
+  if (mimetype === 'application/pdf')                         return 'file-pdf';
+  if (mimetype.includes('word'))                              return 'file-word';
+  if (mimetype.includes('excel') || mimetype.includes('spreadsheet')) return 'file-excel';
+  if (mimetype.includes('powerpoint') || mimetype.includes('presentation')) return 'file-powerpoint';
+  if (mimetype.startsWith('text/'))                           return 'file-alt';
+  if (mimetype === 'application/zip')                         return 'file-archive';
+  return 'file';
+}

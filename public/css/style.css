@@ -345,3 +345,46 @@ hr { border-color: var(--card-border); }
 .bg-dark-card { background: var(--card-bg); }
 .rounded-lg   { border-radius: 12px; }
 .fw-600       { font-weight: 600; }
+
+/* ---- Attachments ---- */
+.attachment-list {
+  margin-top: .75rem;
+  border-top: 1px solid var(--card-border);
+  padding-top: .75rem;
+}
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  background: rgba(108,99,255,.06);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: .45rem .75rem;
+  margin-bottom: .4rem;
+  font-size: .82rem;
+}
+.attachment-item .att-icon { font-size: 1rem; color: var(--info); flex-shrink: 0; }
+.attachment-item .att-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  text-decoration: none;
+}
+.attachment-item .att-name:hover { color: var(--primary); }
+.attachment-item .att-size { color: var(--muted); flex-shrink: 0; font-size: .75rem; }
+.attachment-item .att-actions { flex-shrink: 0; display: flex; gap: .3rem; }
+
+/* ---- Upload progress ---- */
+.upload-progress {
+  height: 4px;
+  background: var(--primary);
+  border-radius: 2px;
+  margin-top: .4rem;
+  animation: pulse-bar 1.2s ease-in-out infinite;
+}
+@keyframes pulse-bar {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}

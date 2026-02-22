@@ -1,10 +1,14 @@
 const express       = require('express');
 const router        = express.Router();
+const mongoose      = require('mongoose');
 const auth          = require('../middleware/auth');
+const upload        = require('../middleware/upload');
 const Group         = require('../models/Group');
 const GroupResource = require('../models/GroupResource');
+const GroupFile     = require('../models/GroupFile');
 const Note          = require('../models/Note');
 const Project       = require('../models/Project');
+const { getBucket } = require('../config/gridfs');
 
 // Helper: random 6-char invite code
 const genCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -126,6 +130,83 @@ router.delete('/:id/leave', auth, async (req, res) => {
     group.members = group.members.filter(m => m.studentId.toString() !== req.student.id);
     await group.save();
     res.json({ message: 'You have left the group.' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/groups/:id/files  — upload file to group
+router.post('/:id/files', auth, upload.single('file'), async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Group not found.' });
+
+    const isMember = group.members.some(m => m.studentId.toString() === req.student.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied.' });
+    if (!req.file)  return res.status(400).json({ error: 'No file provided.' });
+
+    const bucket   = getBucket();
+    const filename = `${Date.now()}-${req.file.originalname.replace(/\s+/g, '_')}`;
+
+    const fileId = await new Promise((resolve, reject) => {
+      const stream = bucket.openUploadStream(filename, {
+        contentType: req.file.mimetype,
+        metadata: { entityType: 'group', entityId: group._id.toString(), uploadedBy: req.student.id }
+      });
+      stream.on('error', reject);
+      stream.on('finish', () => resolve(stream.id));
+      stream.end(req.file.buffer);
+    });
+
+    const groupFile = await GroupFile.create({
+      groupId: group._id,
+      fileId,
+      filename,
+      originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      uploadedBy: req.student.id
+    });
+    res.status(201).json(groupFile);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/groups/:id/files  — list group files
+router.get('/:id/files', auth, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Group not found.' });
+
+    const isMember = group.members.some(m => m.studentId.toString() === req.student.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied.' });
+
+    const files = await GroupFile.find({ groupId: req.params.id })
+      .populate('uploadedBy', 'name')
+      .sort({ uploadedAt: -1 });
+    res.json(files);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/groups/:id/files/:groupFileId  — delete group file
+router.delete('/:id/files/:groupFileId', auth, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Group not found.' });
+
+    const isMember = group.members.some(m => m.studentId.toString() === req.student.id);
+    if (!isMember) return res.status(403).json({ error: 'Access denied.' });
+
+    const groupFile = await GroupFile.findOne({ _id: req.params.groupFileId, groupId: req.params.id });
+    if (!groupFile) return res.status(404).json({ error: 'File not found.' });
+
+    if (groupFile.uploadedBy.toString() !== req.student.id) {
+      return res.status(403).json({ error: 'Only the uploader can delete this file.' });
+    }
+
+    const bucket = getBucket();
+    await bucket.delete(groupFile.fileId);
+    await GroupFile.deleteOne({ _id: groupFile._id });
+    res.json({ message: 'File deleted.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
