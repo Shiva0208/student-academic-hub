@@ -422,7 +422,7 @@
     el.innerHTML = files.map(f => `
       <div class="attachment-item" data-id="${f._id}">
         <i class="fas fa-${fileIcon(f.mimetype)} att-icon"></i>
-        <a class="att-name" href="/api/files/${f.fileId}" target="_blank" title="${esc(f.originalName)}">${esc(f.originalName)}</a>
+        <a class="att-name" href="/api/files/${f.fileId}?token=${localStorage.getItem('token')}" target="_blank" title="${esc(f.originalName)}">${esc(f.originalName)}</a>
         <span class="att-size">${fmtSize(f.size)}</span>
         <div class="att-actions" style="flex-direction:column;align-items:flex-end;gap:0;">
           <span style="font-size:.7rem;color:var(--muted);">${f.uploadedBy ? esc(f.uploadedBy.name) : 'Unknown'}</span>

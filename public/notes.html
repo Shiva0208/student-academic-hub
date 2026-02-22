@@ -270,7 +270,7 @@
     el.innerHTML = attachments.map(a => `
       <div class="attachment-item">
         <i class="fas fa-${fileIcon(a.mimetype)} att-icon"></i>
-        <a class="att-name" href="/api/files/${a.fileId}" target="_blank" title="${esc(a.originalName)}">${esc(a.originalName)}</a>
+        <a class="att-name" href="/api/files/${a.fileId}?token=${localStorage.getItem('token')}" target="_blank" title="${esc(a.originalName)}">${esc(a.originalName)}</a>
         <span class="att-size">${fmtSize(a.size)}</span>
         <div class="att-actions">
           <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteNoteAttachment('${a.fileId}')">
