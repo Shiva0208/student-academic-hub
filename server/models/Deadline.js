@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const AttachmentSchema = require('./AttachmentSchema');
 
 const DeadlineSchema = new mongoose.Schema({
   studentId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
@@ -7,6 +8,7 @@ const DeadlineSchema = new mongoose.Schema({
   dueDate:     { type: Date, required: true },
   priority:    { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
   status:      { type: String, enum: ['upcoming', 'completed', 'missed'], default: 'upcoming' },
+  attachments: { type: [AttachmentSchema], default: [] },
   createdAt:   { type: Date, default: Date.now }
 });
 
