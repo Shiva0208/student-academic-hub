@@ -80,6 +80,14 @@
           <label>Content</label>
           <textarea id="noteContent" class="form-control mt-1" rows="6" placeholder="Write your note here..."></textarea>
         </div>
+        <div class="mb-3" id="noteAddFileSection">
+          <label>Attachments <span style="color:var(--muted);font-size:.82rem;">(optional)</span></label>
+          <label class="btn btn-outline-secondary btn-sm mt-1 d-block" style="cursor:pointer;text-align:left;">
+            <i class="fas fa-paperclip me-1"></i>Choose files
+            <input type="file" id="noteAddFileInput" multiple style="display:none;" onchange="updateNoteFilePreview()" />
+          </label>
+          <div id="noteAddFilePreview" style="margin-top:.4rem;"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -208,6 +216,9 @@
     document.getElementById('noteContent').value = '';
     document.getElementById('modalTitle').textContent = 'Add Note';
     document.getElementById('saveText').textContent = 'Save Note';
+    document.getElementById('noteAddFileInput').value = '';
+    document.getElementById('noteAddFilePreview').innerHTML = '';
+    document.getElementById('noteAddFileSection').style.display = 'block';
   }
 
   function openEdit(n) {
@@ -217,7 +228,17 @@
     document.getElementById('noteContent').value = n.content || '';
     document.getElementById('modalTitle').textContent = 'Edit Note';
     document.getElementById('saveText').textContent = 'Update Note';
+    document.getElementById('noteAddFileSection').style.display = 'none';
     new bootstrap.Modal(document.getElementById('noteModal')).show();
+  }
+
+  function updateNoteFilePreview() {
+    const files = document.getElementById('noteAddFileInput').files;
+    const el = document.getElementById('noteAddFilePreview');
+    if (!files.length) { el.innerHTML = ''; return; }
+    el.innerHTML = Array.from(files).map(f =>
+      `<div style="font-size:.8rem;color:var(--muted);padding:.15rem 0;"><i class="fas fa-${fileIcon(f.type)} me-1" style="color:var(--info);"></i>${esc(f.name)} <span style="color:var(--muted);">(${fmtSize(f.size)})</span></div>`
+    ).join('');
   }
 
   function viewNote(id) {
@@ -299,10 +320,20 @@
     const spin = document.getElementById('saveSpinner');
     spin.classList.remove('d-none');
     try {
-      if (id) await api('PUT',  `/notes/${id}`, { title, subject, content });
-      else    await api('POST', '/notes',        { title, subject, content });
+      if (id) {
+        await api('PUT', `/notes/${id}`, { title, subject, content });
+        toast('Note updated!', 'success');
+      } else {
+        const newNote = await api('POST', '/notes', { title, subject, content });
+        const files = document.getElementById('noteAddFileInput').files;
+        for (const file of files) {
+          const fd = new FormData();
+          fd.append('file', file);
+          await apiUpload('POST', `/notes/${newNote._id}/attachments`, fd);
+        }
+        toast(files.length ? `Note added with ${files.length} file${files.length>1?'s':''}!` : 'Note added!', 'success');
+      }
       bootstrap.Modal.getInstance(document.getElementById('noteModal')).hide();
-      toast(id ? 'Note updated!' : 'Note added!', 'success');
       loadNotes();
     } catch (err) { toast(err.message, 'error'); }
     finally { spin.classList.add('d-none'); }

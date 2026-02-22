@@ -130,6 +130,14 @@
           <label>Description</label>
           <textarea id="createDesc" class="form-control mt-1" rows="3" placeholder="What is this group for?"></textarea>
         </div>
+        <div class="mb-3">
+          <label>Attachments <span style="color:var(--muted);font-size:.82rem;">(optional)</span></label>
+          <label class="btn btn-outline-secondary btn-sm mt-1 d-block" style="cursor:pointer;text-align:left;">
+            <i class="fas fa-paperclip me-1"></i>Choose files
+            <input type="file" id="groupCreateFileInput" multiple style="display:none;" onchange="updateGroupCreatePreview()" />
+          </label>
+          <div id="groupCreateFilePreview" style="margin-top:.4rem;"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -310,6 +318,17 @@
   function resetCreate() {
     document.getElementById('createName').value = '';
     document.getElementById('createDesc').value = '';
+    document.getElementById('groupCreateFileInput').value = '';
+    document.getElementById('groupCreateFilePreview').innerHTML = '';
+  }
+
+  function updateGroupCreatePreview() {
+    const files = document.getElementById('groupCreateFileInput').files;
+    const el = document.getElementById('groupCreateFilePreview');
+    if (!files.length) { el.innerHTML = ''; return; }
+    el.innerHTML = Array.from(files).map(f =>
+      `<div style="font-size:.8rem;color:var(--muted);padding:.15rem 0;"><i class="fas fa-${fileIcon(f.type)} me-1" style="color:var(--info);"></i>${esc(f.name)} <span style="color:var(--muted);">(${fmtSize(f.size)})</span></div>`
+    ).join('');
   }
 
   async function createGroup() {
@@ -318,9 +337,15 @@
     const spin = document.getElementById('createSpinner');
     spin.classList.remove('d-none');
     try {
-      await api('POST', '/groups', { name, description: document.getElementById('createDesc').value });
+      const newGroup = await api('POST', '/groups', { name, description: document.getElementById('createDesc').value });
+      const files = document.getElementById('groupCreateFileInput').files;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        await apiUpload('POST', `/groups/${newGroup._id}/files`, fd);
+      }
       bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
-      toast('Group created!', 'success');
+      toast(files.length ? `Group created with ${files.length} file${files.length>1?'s':''}!` : 'Group created!', 'success');
       loadGroups();
     } catch (err) { toast(err.message, 'error'); }
     finally { spin.classList.add('d-none'); }
