@@ -101,9 +101,12 @@
               <div id="groupUploadProgress" class="upload-progress d-none" style="margin-top:.5rem;"></div>
             </div>
 
-            <div class="mt-3 pt-3" style="border-top:1px solid var(--card-border)">
-              <button class="btn btn-outline-danger btn-sm" onclick="leaveGroup()">
+            <div class="mt-3 pt-3 d-flex gap-2" style="border-top:1px solid var(--card-border)">
+              <button class="btn btn-outline-danger btn-sm" id="leaveGroupBtn" onclick="leaveGroup()">
                 <i class="fas fa-sign-out-alt me-1"></i>Leave Group
+              </button>
+              <button class="btn btn-danger btn-sm d-none" id="deleteGroupBtn" onclick="deleteGroup()">
+                <i class="fas fa-trash me-1"></i>Delete Group
               </button>
             </div>
           </div>
@@ -275,6 +278,13 @@
           </div>
         </div>`;
       }).join('');
+
+      // Show delete button only for admin, hide leave for admin
+      const isAdmin = (detailed.members||[]).some(m =>
+        m.studentId && (m.studentId._id||m.studentId).toString() === student.id && m.role === 'admin'
+      );
+      document.getElementById('deleteGroupBtn').classList.toggle('d-none', !isAdmin);
+      document.getElementById('leaveGroupBtn').classList.toggle('d-none', isAdmin);
     } catch (err) { membersEl.innerHTML = `<p style="color:var(--danger)">${err.message}</p>`; }
 
     loadResources(id);
@@ -397,6 +407,17 @@
     try {
       await api('DELETE', `/groups/${activeGroup._id}/leave`);
       toast('You left the group.', 'success');
+      closeDetail();
+      loadGroups();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function deleteGroup() {
+    if (!activeGroup) return;
+    if (!confirm2(`Permanently delete "${activeGroup.name}"? This will remove all members, shared resources, and uploaded files.`)) return;
+    try {
+      await api('DELETE', `/groups/${activeGroup._id}`);
+      toast('Group deleted.', 'success');
       closeDetail();
       loadGroups();
     } catch (err) { toast(err.message, 'error'); }

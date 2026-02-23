@@ -49,8 +49,8 @@ router.post('/join', auth, async (req, res) => {
     const group = await Group.findOne({ inviteCode: inviteCode.toUpperCase() });
     if (!group) return res.status(404).json({ error: 'Invalid invite code.' });
 
-    const already = group.members.some(m => m.studentId.toString() === req.student.id);
-    if (already) return res.status(400).json({ error: 'You are already a member.' });
+    const already = group.members.some(m => String(m.studentId) === String(req.student.id));
+    if (already) return res.status(400).json({ error: `You are already a member of "${group.name}".` });
 
     group.members.push({ studentId: req.student.id, role: 'member' });
     await group.save();
@@ -118,6 +118,35 @@ router.post('/:id/share', auth, async (req, res) => {
       sharedBy: req.student.id
     });
     res.status(201).json(gr);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/groups/:id  — delete group (admin only)
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Group not found.' });
+
+    const isAdmin = group.members.some(
+      m => String(m.studentId) === String(req.student.id) && m.role === 'admin'
+    );
+    if (!isAdmin) return res.status(403).json({ error: 'Only the group admin can delete this group.' });
+
+    // Delete all group files from GridFS + GroupFile collection
+    const groupFiles = await GroupFile.find({ groupId: group._id });
+    if (groupFiles.length) {
+      const bucket = getBucket();
+      await Promise.all(groupFiles.map(f => bucket.delete(f.fileId).catch(() => {})));
+      await GroupFile.deleteMany({ groupId: group._id });
+    }
+
+    // Delete shared resources
+    await GroupResource.deleteMany({ groupId: group._id });
+
+    // Delete group
+    await Group.deleteOne({ _id: group._id });
+
+    res.json({ message: 'Group deleted.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
