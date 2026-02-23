@@ -435,6 +435,12 @@
               <a class="att-name" href="/api/files/${a.fileId}?token=${token}" target="_blank"
                  title="${esc(a.originalName)}">${esc(a.originalName)}</a>
               <span class="att-size">${fmtSize(a.size)}</span>
+              <div class="att-actions">
+                <a href="/api/files/${a.fileId}?token=${token}" download="${esc(a.originalName)}"
+                   class="btn btn-outline-secondary btn-sm py-0 px-1" title="Download">
+                  <i class="fas fa-download"></i>
+                </a>
+              </div>
             </div>`).join('')}
         </div>
       </div>`;
