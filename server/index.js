@@ -4,12 +4,14 @@ const cors    = require('cors');
 const path    = require('path');
 const connectDB = require('./config/db');
 const { initGridFS } = require('./config/gridfs');
+const startDeadlineReminder = require('./jobs/deadlineReminder');
 
 const app = express();
 
-// Connect MongoDB + init GridFS
+// Connect MongoDB + init GridFS + start jobs
 connectDB();
 initGridFS();
+startDeadlineReminder();
 
 // Middleware
 app.use(cors());

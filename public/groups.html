@@ -34,6 +34,9 @@
 </nav>
 
 <div class="container py-4">
+  <!-- Pending Invitations Banner -->
+  <div id="invitationsBanner" class="d-none mb-4"></div>
+
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <h4 class="page-title mb-0"><i class="fas fa-users me-2"></i>Study Groups</h4>
     <div class="d-flex gap-2">
@@ -66,6 +69,24 @@
           <div class="col-md-4">
             <h6 class="text-accent mb-3"><i class="fas fa-user-friends me-1"></i>Members</h6>
             <div id="membersList"></div>
+
+            <!-- Invite Member (admin only) -->
+            <div id="inviteMemberSection" class="d-none mt-3 pt-3" style="border-top:1px solid var(--card-border)">
+              <h6 class="text-accent mb-2" style="font-size:.85rem;"><i class="fas fa-user-plus me-1"></i>Invite Member</h6>
+              <div class="d-flex gap-2">
+                <input type="email" id="inviteEmail" class="form-control form-control-sm" placeholder="Enter student email" />
+                <button class="btn btn-primary btn-sm text-nowrap" onclick="inviteMember()">
+                  <span id="inviteSpinner" class="spinner-border spinner-border-sm me-1 d-none"></span>Send
+                </button>
+              </div>
+            </div>
+
+            <!-- Sent Invitations (admin only) -->
+            <div id="sentInvitationsSection" class="d-none mt-3 pt-3" style="border-top:1px solid var(--card-border)">
+              <h6 class="text-accent mb-2" style="font-size:.85rem;"><i class="fas fa-envelope me-1"></i>Sent Invitations</h6>
+              <div id="sentInvitationsList"></div>
+            </div>
+
             <div class="mt-3 p-2" style="background:rgba(108,99,255,.06);border-radius:8px;">
               <div style="font-size:.8rem;color:var(--muted);">Invite Code</div>
               <div class="invite-code mt-1" id="detailInviteCode"></div>
@@ -217,14 +238,60 @@
   if (!checkAuth()) throw new Error('Not logged in');
   initNav('groups');
 
-  let allGroups  = [];
+  let allGroups   = [];
   let activeGroup = null;
-  const student  = getStudent();
+  const student   = getStudent();
 
   async function loadGroups() {
     try {
       allGroups = await api('GET', '/groups');
       renderGroups();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  // ── Pending Invitations Banner ────────────────────────────────────────────
+  async function loadPendingInvitations() {
+    try {
+      const invitations = await api('GET', '/groups/invitations');
+      const banner = document.getElementById('invitationsBanner');
+      if (!invitations.length) { banner.classList.add('d-none'); return; }
+
+      banner.classList.remove('d-none');
+      banner.innerHTML = `
+        <div class="card" style="border-left:4px solid var(--accent);">
+          <div class="card-body py-3">
+            <h6 class="text-accent mb-3"><i class="fas fa-envelope-open me-1"></i>
+              You have ${invitations.length} pending group invitation${invitations.length > 1 ? 's' : ''}
+            </h6>
+            ${invitations.map(inv => `
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-2 p-2"
+                   style="background:rgba(108,99,255,.05);border-radius:8px;">
+                <div>
+                  <span style="font-weight:600;">${esc(inv.groupId?.name || 'Unknown Group')}</span>
+                  <span style="font-size:.8rem;color:var(--muted);margin-left:8px;">
+                    invited by ${esc(inv.invitedBy?.name || 'Unknown')}
+                  </span>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-success btn-sm py-0 px-2" onclick="respondInvitation('${inv._id}','accepted')">
+                    <i class="fas fa-check me-1"></i>Accept
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="respondInvitation('${inv._id}','rejected')">
+                    <i class="fas fa-times me-1"></i>Reject
+                  </button>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    } catch (err) { /* silent */ }
+  }
+
+  async function respondInvitation(invId, status) {
+    try {
+      const res = await api('PATCH', `/groups/invitations/${invId}/respond`, { status });
+      toast(status === 'accepted' ? 'You joined the group!' : 'Invitation rejected.', status === 'accepted' ? 'success' : 'info');
+      loadPendingInvitations();
+      if (status === 'accepted') loadGroups();
     } catch (err) { toast(err.message, 'error'); }
   }
 
@@ -279,12 +346,15 @@
         </div>`;
       }).join('');
 
-      // Show delete button only for admin, hide leave for admin
+      // Show/hide admin-only sections
       const isAdmin = (detailed.members||[]).some(m =>
         m.studentId && (m.studentId._id||m.studentId).toString() === student.id && m.role === 'admin'
       );
       document.getElementById('deleteGroupBtn').classList.toggle('d-none', !isAdmin);
       document.getElementById('leaveGroupBtn').classList.toggle('d-none', isAdmin);
+      document.getElementById('inviteMemberSection').classList.toggle('d-none', !isAdmin);
+      document.getElementById('sentInvitationsSection').classList.toggle('d-none', !isAdmin);
+      if (isAdmin) loadSentInvitations(id);
     } catch (err) { membersEl.innerHTML = `<p style="color:var(--danger)">${err.message}</p>`; }
 
     loadResources(id);
@@ -423,6 +493,47 @@
     } catch (err) { toast(err.message, 'error'); }
   }
 
+  async function inviteMember() {
+    if (!activeGroup) return;
+    const email = document.getElementById('inviteEmail').value.trim();
+    if (!email) { toast('Enter an email address.', 'warning'); return; }
+    const spin = document.getElementById('inviteSpinner');
+    spin.classList.remove('d-none');
+    try {
+      await api('POST', `/groups/${activeGroup._id}/invite`, { email });
+      document.getElementById('inviteEmail').value = '';
+      toast(`Invitation sent to ${email}!`, 'success');
+      loadSentInvitations(activeGroup._id);
+    } catch (err) { toast(err.message, 'error'); }
+    finally { spin.classList.add('d-none'); }
+  }
+
+  async function loadSentInvitations(groupId) {
+    const el = document.getElementById('sentInvitationsList');
+    try {
+      const invitations = await api('GET', `/groups/${groupId}/invitations`);
+      if (!invitations.length) {
+        el.innerHTML = '<p style="font-size:.8rem;color:var(--muted);">No invitations sent yet.</p>';
+        return;
+      }
+      const statusColor = { pending:'var(--warning)', accepted:'var(--success)', rejected:'var(--danger)' };
+      const statusIcon  = { pending:'clock', accepted:'check-circle', rejected:'times-circle' };
+      el.innerHTML = invitations.map(inv => `
+        <div class="d-flex align-items-center justify-content-between mb-2"
+             style="font-size:.82rem;padding:.3rem .5rem;background:rgba(0,0,0,.03);border-radius:6px;">
+          <div>
+            <span style="font-weight:600;">${esc(inv.invitedUser?.name || inv.invitedUser?.email || 'Unknown')}</span>
+            <span style="color:var(--muted);font-size:.75rem;"> · ${esc(inv.invitedUser?.email || '')}</span>
+          </div>
+          <span style="color:${statusColor[inv.status]};white-space:nowrap;">
+            <i class="fas fa-${statusIcon[inv.status]} me-1"></i>${inv.status}
+          </span>
+        </div>`).join('');
+    } catch (err) {
+      el.innerHTML = `<p style="font-size:.8rem;color:var(--danger);">${err.message}</p>`;
+    }
+  }
+
   async function loadGroupFiles(id) {
     const el = document.getElementById('groupFilesList');
     el.innerHTML = '<div class="empty-state" style="padding:1rem"><i class="fas fa-spinner fa-spin"></i></div>';
@@ -479,6 +590,7 @@
   }
 
   loadGroups();
+  loadPendingInvitations();
 </script>
 </body>
 </html>
